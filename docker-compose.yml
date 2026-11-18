@@ -1,0 +1,114 @@
+services:
+
+  # DATABASE
+  db:
+    image: postgres:18
+    container_name: datamind-postgres
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+
+    ports:
+      - "127.0.0.1:5433:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql
+
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # BACKEND
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+
+    container_name: datamind-backend
+    restart: unless-stopped
+
+    ports:
+      - "127.0.0.1:8000:8000"
+
+    depends_on:
+      db:
+        condition: service_healthy
+
+    environment:
+      # Application database
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: ${POSTGRES_DB}
+      DB_USER: ${APP_DB_USER}
+      DB_PASSWORD: ${APP_DB_PASSWORD}
+      DATASET_IMPORT_DB_USER: ${DATASET_IMPORT_DB_USER}
+      DATASET_IMPORT_DB_PASSWORD: ${DATASET_IMPORT_DB_PASSWORD}
+      DATASET_READ_DB_USER: ${DATASET_READ_DB_USER:-datamind_reader}
+      DATASET_ROLE_SECRET: ${DATASET_ROLE_SECRET}
+
+      # Authentication
+      AUTH_SECRET_KEY: ${AUTH_SECRET_KEY}
+      AUTH_TOKEN_EXPIRE_MINUTES: ${AUTH_TOKEN_EXPIRE_MINUTES:-30}
+      AUTH_ALLOW_REGISTRATION: ${AUTH_ALLOW_REGISTRATION:-true}
+
+      # History database
+      HISTORY_DB_HOST: db
+      HISTORY_DB_PORT: "5432"
+      HISTORY_DB_NAME: ${POSTGRES_DB}
+      HISTORY_DB_USER: ${HISTORY_DB_USER}
+      HISTORY_DB_PASSWORD: ${HISTORY_DB_PASSWORD}
+
+      # Microsoft Foundry
+      FOUNDRY_PROJECT_ENDPOINT: ${FOUNDRY_PROJECT_ENDPOINT}
+      FOUNDRY_MODEL: ${FOUNDRY_MODEL}
+
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3)"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+    volumes:
+      - azure_cli_data:/home/appuser/.azure
+
+  # FRONTEND
+  frontend:
+    build:
+      context: ./frontend/datamind-ui
+      dockerfile: Dockerfile
+
+    container_name: datamind-frontend
+    restart: unless-stopped
+
+    ports:
+      - "127.0.0.1:4200:80"
+
+    depends_on:
+      backend:
+        condition: service_healthy
+
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget -q -O /dev/null http://127.0.0.1/ || exit 1
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  postgres_data:
+  azure_cli_data:

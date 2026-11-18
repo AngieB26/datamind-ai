@@ -1,0 +1,10 @@
+CREATE TABLE IF NOT EXISTS query_history (
+    history_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    question TEXT NOT NULL,
+    generated_sql TEXT NOT NULL,
+    row_count INTEGER NOT NULL DEFAULT 0,
+    truncated BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT check_row_count CHECK (row_count >= 0)
+);

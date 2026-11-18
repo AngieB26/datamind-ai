@@ -1,0 +1,592 @@
+@if (isRestoringSession()) {
+  <div class="auth-loading">Comprobando sesión...</div>
+} @else if (showAuth()) {
+  <main class="auth-shell">
+    <section class="auth-card">
+      <button type="button" class="auth-back" (click)="closeAuth()">Volver al dashboard</button>
+
+      <img src="/datamind-logo.png" alt="DataMind AI" class="auth-logo" />
+      <p class="auth-eyebrow">DATA ANALYST</p>
+      <h1>{{ authMode() === 'login' ? 'Bienvenido de nuevo' : 'Crea tu cuenta' }}</h1>
+      <p class="auth-subtitle">
+        {{
+          authMode() === 'login'
+            ? 'Accede a tus datasets y continúa tus análisis.'
+            : 'Empieza a analizar tus propios datos con DataMind AI.'
+        }}
+      </p>
+
+      <form class="auth-form" (ngSubmit)="submitAuth()">
+        <label for="auth-email">Correo electrónico</label>
+        <input
+          id="auth-email"
+          name="email"
+          type="email"
+          [(ngModel)]="authEmail"
+          placeholder="usuario@correo.com"
+          autocomplete="email"
+          required
+        />
+
+        <label for="auth-password">Contraseña</label>
+        <input
+          id="auth-password"
+          name="password"
+          type="password"
+          [(ngModel)]="authPassword"
+          placeholder="Mínimo 8 caracteres"
+          [autocomplete]="authMode() === 'login' ? 'current-password' : 'new-password'"
+          required
+        />
+
+        @if (authError()) {
+          <p class="auth-error">{{ authError() }}</p>
+        }
+        @if (authMessage()) {
+          <p class="auth-message">{{ authMessage() }}</p>
+        }
+
+        <button type="submit" class="auth-submit" [disabled]="authBusy()">
+          {{
+            authBusy()
+              ? 'Procesando...'
+              : authMode() === 'login'
+                ? 'Iniciar sesión'
+                : 'Crear cuenta'
+          }}
+        </button>
+      </form>
+
+      <button type="button" class="auth-switch" (click)="switchAuthMode()">
+        {{
+          authMode() === 'login'
+            ? '¿No tienes cuenta? Crear cuenta'
+            : '¿Ya tienes cuenta? Iniciar sesión'
+        }}
+      </button>
+    </section>
+  </main>
+} @else {
+  <div class="app-shell">
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="brand">
+        <img src="/datamind-logo.png" alt="DataMind AI" class="brand-image" />
+      </div>
+
+      <nav class="navigation">
+        <section class="dataset-section">
+          <div class="section-heading">
+            <span>DATASETS</span>
+            <button type="button" title="Actualizar datasets" (click)="loadDatasets()">↻</button>
+          </div>
+
+          @if (datasetsLoading()) {
+            <p class="history-empty">Cargando datasets...</p>
+          }
+
+          @if (datasetsError()) {
+            <p class="history-error">{{ datasetsError() }}</p>
+          }
+
+          <select
+            class="dataset-select"
+            [ngModel]="selectedDataset()?.dataset_id"
+            (ngModelChange)="selectDatasetById($event)"
+            [disabled]="datasetsLoading()"
+            aria-label="Seleccionar dataset"
+          >
+            @for (dataset of datasets(); track dataset.dataset_id) {
+              <option [value]="dataset.dataset_id" [disabled]="dataset.status !== 'ready'">
+                {{ dataset.name
+                }}{{ dataset.status !== 'ready' ? ' (' + dataset.status + ')' : '' }}
+              </option>
+            }
+          </select>
+
+          <input
+            #fileInput
+            type="file"
+            accept=".sql,text/sql"
+            hidden
+            (change)="onFileSelected($event)"
+          />
+
+          <button
+            type="button"
+            class="upload-button"
+            [disabled]="isUploading()"
+            (click)="fileInput.click()"
+          >
+            {{ isUploading() ? 'Importando...' : 'Importar archivo SQL' }}
+          </button>
+
+          <div
+            class="drop-zone"
+            [class.dragging]="isDragging()"
+            (dragover)="onDragOver($event)"
+            (dragleave)="onDragLeave($event)"
+            (drop)="onDrop($event)"
+          >
+            Arrastra aquí tu archivo .sql
+          </div>
+
+          @if (uploadError()) {
+            <p class="history-error">{{ uploadError() }}</p>
+          }
+
+          @if (selectedDataset()?.is_builtin === false) {
+            <button type="button" class="delete-dataset-button" (click)="deleteSelectedDataset()">
+              Eliminar dataset seleccionado
+            </button>
+          }
+        </section>
+
+        <!-- HISTORIAL -->
+        @if (currentUser()) {
+          <section class="history-section">
+            <div class="history-section-header">
+              <span>HISTORIAL</span>
+
+              <button type="button" title="Actualizar historial" (click)="loadHistory()">↻</button>
+            </div>
+
+            @if (historyLoading()) {
+              <p class="history-empty">Cargando consultas...</p>
+            }
+
+            @if (historyError()) {
+              <p class="history-error">
+                {{ historyError() }}
+              </p>
+            }
+
+            @if (!historyLoading() && !historyError() && history().length === 0) {
+              <p class="history-empty">Todavía no hay consultas.</p>
+            }
+
+            <div class="history-list">
+              @for (item of history(); track item.history_id) {
+                <button
+                  type="button"
+                  class="history-item"
+                  [class.active]="selectedHistory()?.history_id === item.history_id"
+                  (click)="viewHistory(item)"
+                >
+                  <span class="history-question">
+                    {{ item.question }}
+                  </span>
+
+                  <span class="history-date">
+                    {{ item.created_at | date: 'dd/MM/yyyy HH:mm' }}
+                  </span>
+                </button>
+              }
+            </div>
+          </section>
+        } @else {
+          <section class="history-section">
+            <div class="history-section-header">
+              <span>HISTORIAL</span>
+            </div>
+
+            <p class="history-empty">Inicia sesión para guardar y recuperar tus consultas.</p>
+          </section>
+        }
+      </nav>
+
+      @if (currentUser(); as user) {
+        <div class="sidebar-account">
+          <span class="account-label">SESIÓN ACTIVA</span>
+          <strong>{{ user.email }}</strong>
+          <button type="button" class="logout-button" (click)="logout()">Cerrar sesión</button>
+        </div>
+      } @else if (isGuest()) {
+        <div class="sidebar-account">
+          <span class="account-label">SESIÓN DE INVITADO</span>
+          <strong>Acceso temporal</strong>
+          <button type="button" class="logout-button" (click)="openAuth()">Iniciar sesión</button>
+        </div>
+      }
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="main-content">
+      <!-- CONTENT -->
+      <section class="content">
+        <!-- WELCOME -->
+        <div class="welcome-section">
+          <h1>
+            Tus datos tienen respuestas.
+            <span>Encuéntralas.</span>
+          </h1>
+
+          <p>
+            Explora información empresarial, formula preguntas y transforma datos en decisiones.
+          </p>
+
+          <div class="account-actions">
+            @if (currentUser(); as user) {
+              <span class="account-status"> Sesión iniciada: {{ user.email }} </span>
+            } @else {
+              <span class="account-status">
+                Modo invitado · Tus consultas no se guardan en el historial.
+              </span>
+
+              <button
+                type="button"
+                class="auth-action auth-action-secondary"
+                (click)="openAuth('login')"
+              >
+                Iniciar sesión
+              </button>
+
+              <button
+                type="button"
+                class="auth-action auth-action-primary"
+                (click)="openAuth('register')"
+              >
+                Crear cuenta
+              </button>
+            }
+          </div>
+        </div>
+
+        @if (selectedDataset(); as dataset) {
+          <section class="dataset-context">
+            <div>
+              <span class="eyebrow">DATASET SELECCIONADO</span>
+              <h2>{{ dataset.name }}</h2>
+              <p>
+                {{ dataset.table_count }} tablas · {{ dataset.row_count }} registros · esquema
+                <code>{{ dataset.schema_name }}</code>
+              </p>
+            </div>
+            <button type="button" class="secondary-button" (click)="toggleSchema()">
+              {{ schemaExpanded() ? 'Ocultar estructura' : 'Ver estructura' }}
+            </button>
+          </section>
+
+          @if (schemaExpanded()) {
+            <section class="schema-card">
+              <div class="section-heading">
+                <span>ESTRUCTURA DEL DATASET</span>
+                @if (schemaLoading()) {
+                  <span class="schema-loading">Cargando...</span>
+                }
+              </div>
+
+              @if (schema(); as datasetSchema) {
+                @for (table of datasetSchema.tables; track table.name) {
+                  <details class="schema-table" open>
+                    <summary>{{ table.name }}</summary>
+                    <div class="schema-columns">
+                      @for (column of table.columns; track column.name) {
+                        <span>
+                          <strong>{{ column.name }}</strong>
+                          <small>{{ column.type }}</small>
+                        </span>
+                      }
+                    </div>
+                  </details>
+                }
+              }
+            </section>
+          }
+        }
+
+        <!-- QUERY FORM -->
+        <form class="query-card" (ngSubmit)="submitQuery()">
+          <div class="query-heading">
+            <div>
+              <h2>¿Qué quieres analizar hoy?</h2>
+
+              <p>Escribe tu pregunta en lenguaje natural.</p>
+            </div>
+
+            <span class="ai-badge"> ✦ AI ANALYST </span>
+          </div>
+
+          <textarea
+            name="question"
+            [(ngModel)]="question"
+            rows="4"
+            maxlength="1000"
+            placeholder="Ej. ¿Cuáles fueron mis 5 productos más vendidos este mes?"
+            [disabled]="isLoading()"
+          ></textarea>
+
+          <div class="query-footer">
+            <span> Consulta tus datos sin escribir SQL. </span>
+
+            <button type="submit" [disabled]="!question.trim() || isLoading() || !isConnected()">
+              {{ isLoading() ? 'Analizando...' : 'Enviar consulta' }}
+            </button>
+          </div>
+
+          @if (isLoading()) {
+            <div class="loading-message">
+              <span class="loading-spinner"></span>
+              GPT-4.1 mini está analizando tu pregunta...
+            </div>
+          }
+        </form>
+
+        <!-- ERROR -->
+        @if (errorMessage()) {
+          <section class="error-card">
+            <div class="error-title">
+              <span>!</span>
+              No se pudo completar el análisis
+            </div>
+
+            <p>{{ errorMessage() }}</p>
+          </section>
+        }
+
+        <!-- HISTORIAL RESTAURADO -->
+        @if (selectedHistory(); as item) {
+          <div class="history-restored-banner">
+            <span>↻</span>
+
+            <div>
+              <strong>Consulta recuperada del historial</strong>
+
+              <p>
+                Se restauraron {{ item.row_count }} registros sin realizar una nueva llamada a
+                Microsoft Foundry.
+              </p>
+            </div>
+          </div>
+
+          @if (!item.result_rows?.length) {
+            <section class="error-card">
+              Esta consulta no tiene resultados almacenados. Puedes volver a ejecutarla desde el
+              formulario.
+            </section>
+          }
+
+          <!--
+
+        <section class="results-card">
+
+          <div class="results-header">
+
+            <div>
+              <span class="eyebrow">
+                HISTORIAL DE CONSULTAS
+              </span>
+
+              <h2>Consulta anterior</h2>
+
+              <p>{{ item.question }}</p>
+            </div>
+
+            <span class="result-count">
+              {{ item.row_count }} registros
+            </span>
+
+          </div>
+
+          <div class="history-meta">
+            <span>
+              Consulta #{{ item.history_id }}
+            </span>
+
+            <span>
+              {{ item.created_at | date:'dd/MM/yyyy HH:mm' }}
+            </span>
+          </div>
+
+          <details class="sql-details" open>
+
+            <summary>
+              Consulta SQL generada por la IA
+            </summary>
+
+            <pre>{{ item.generated_sql }}</pre>
+
+          </details>
+
+          <p class="history-note">
+            Esta consulta se recuperó del historial.
+            No se ha vuelto a ejecutar la IA.
+          </p>
+
+          <div class="result-actions">
+
+            <button
+              type="button"
+              class="secondary-button"
+              (click)="clearResults()"
+            >
+              Nueva consulta
+            </button>
+
+          </div>
+
+        </section>
+        -->
+        }
+
+        <!-- RESULTS -->
+        @if (answer(); as result) {
+          <section class="results-card">
+            <div class="results-header">
+              <div>
+                <span class="eyebrow"> RESULTADOS DEL ANÁLISIS </span>
+
+                <h2>Respuesta de DataMind AI</h2>
+
+                <p>{{ result.question }}</p>
+              </div>
+
+              <span class="result-count"> {{ result.row_count }} registros </span>
+            </div>
+
+            <!-- RESULTS TABLE -->
+            <div class="table-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    @for (column of result.columns; track column) {
+                      <th>{{ column }}</th>
+                    }
+                  </tr>
+                </thead>
+
+                <tbody>
+                  @for (row of result.rows; track $index) {
+                    <tr>
+                      @for (cell of row; track $index) {
+                        <td>{{ cell ?? '—' }}</td>
+                      }
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+
+            <!-- CHART VISUALIZATION -->
+            <div class="chart-block">
+              <div class="chart-header">
+                <div>
+                  <h3>Visualización de resultados</h3>
+                  <p>Representación gráfica de los datos consultados.</p>
+                </div>
+
+                @if (chartAvailable()) {
+                  <div class="chart-controls">
+                    <span class="chart-label">Visualización</span>
+
+                    <div class="chart-options">
+                      <button
+                        type="button"
+                        [class.active]="chartType() === 'bar'"
+                        (click)="changeChartType('bar')"
+                      >
+                        <span>▥</span>
+                        Barras
+                      </button>
+
+                      <button
+                        type="button"
+                        [class.active]="chartType() === 'line'"
+                        (click)="changeChartType('line')"
+                      >
+                        <span>⌁</span>
+                        Líneas
+                      </button>
+
+                      <button
+                        type="button"
+                        [class.active]="chartType() === 'doughnut'"
+                        (click)="changeChartType('doughnut')"
+                      >
+                        <span>◉</span>
+                        Dona
+                      </button>
+                    </div>
+                  </div>
+                }
+              </div>
+
+              <div class="chart-container">
+                <canvas #resultChart [hidden]="!chartAvailable()"></canvas>
+
+                @if (!chartAvailable()) {
+                  <div class="chart-unavailable">
+                    <div class="chart-message-icon"><span>i</span></div>
+                    <h4>Visualización no disponible</h4>
+                    <p>{{ chartMessage() }}</p>
+                    <span class="chart-hint">Los resultados siguen disponibles en la tabla.</span>
+                  </div>
+                }
+              </div>
+            </div>
+
+            @if (result.truncated) {
+              <p class="development-note">Se muestran los primeros registros del resultado.</p>
+            }
+
+            <!-- SQL GENERATED -->
+            <details class="sql-details">
+              <summary>
+                <span>⌘</span>
+                Ver consulta SQL generada por la IA
+              </summary>
+
+              <pre>{{ result.sql }}</pre>
+            </details>
+
+            <div class="result-actions">
+              <button type="button" class="export-button" (click)="exportCsv()">
+                Exportar CSV
+              </button>
+
+              <button type="button" class="secondary-button" (click)="clearResults()">
+                Nueva consulta
+              </button>
+            </div>
+          </section>
+        }
+
+        <!-- EXAMPLES -->
+        <section class="examples">
+          <h3>Ideas para comenzar</h3>
+
+          <div class="example-grid">
+            <article class="example-card">
+              <span class="example-icon">↗</span>
+
+              <h4>Análisis de ventas</h4>
+
+              <p>Consulta la evolución de tus ventas por período.</p>
+            </article>
+
+            <article class="example-card">
+              <span class="example-icon">▦</span>
+
+              <h4>Productos destacados</h4>
+
+              <p>Identifica tus productos más vendidos.</p>
+            </article>
+
+            <article class="example-card">
+              <span class="example-icon">◎</span>
+
+              <h4>Análisis de clientes</h4>
+
+              <p>Conoce el comportamiento de tus clientes.</p>
+            </article>
+          </div>
+        </section>
+      </section>
+
+      <!-- FOOTER -->
+      <footer class="footer">DataMind AI © 2026 · Plataforma de análisis empresarial</footer>
+    </main>
+  </div>
+}
+
+<router-outlet />

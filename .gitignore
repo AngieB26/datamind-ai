@@ -1,0 +1,72 @@
+# ===================================
+# ENVIRONMENT AND SECRETS
+# ===================================
+
+.env
+.env.*
+!.env.example
+!.env.docker.example
+
+**/.env
+**/.env.*
+!.env.docker.example
+!**/.env.example
+
+# Azure credentials and cache
+.azure/
+.azd/
+.azure-cli/
+
+# ===================================
+# PYTHON
+# ===================================
+
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ===================================
+# ANGULAR
+# ===================================
+
+node_modules/
+.angular/
+dist/
+coverage/
+
+# ===================================
+# DATABASE BACKUPS
+# ===================================
+
+*.dump
+*.backup
+database/backups/
+
+# ===================================
+# LOGS
+# ===================================
+
+*.log
+logs/
+
+# ===================================
+# IDE AND OS
+# ===================================
+
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+/backups/
+/.security_stage1_backup/
+
+/security_stage_context.txt
+/docker-compose*.bak
+*.bak
+*.previous.png
+/datamind_isolation_stage1/
